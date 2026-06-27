@@ -65,19 +65,43 @@ const els = {
   redPassBtn: document.querySelector("#redPassBtn"),
 };
 
+const supabaseSettings = window.GUNGI_SUPABASE || {};
+const supabaseClient =
+  window.supabase && supabaseSettings.url && supabaseSettings.publishableKey
+    ? window.supabase.createClient(supabaseSettings.url, supabaseSettings.publishableKey)
+    : null;
+let realtimeChannel = null;
+let lastRemoteMoveId = 0;
+let syncReady = false;
+
 const params = new URLSearchParams(location.search);
 let roomId = params.get("id") || createRoomId();
 let selected = null;
 let legalTargets = [];
 let selectedCell = null;
 let state = loadState() || createInitialState();
-state.phase = state.phase || (state.boardMoveCount ? "battle" : "setup");
+state = normalizeState(state);
 if (state.phase !== "battle" && state.hands.blue.length === 0 && state.hands.red.length === 0) {
   state.phase = "battle";
 }
 
 function createRoomId() {
-  return Math.random().toString(36).slice(2, 8);
+  const bytes = new Uint8Array(12);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(36).padStart(2, "0")).join("").slice(0, 18);
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function clientId() {
+  const key = "gungi-web:client-id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = createRoomId();
+    localStorage.setItem(key, id);
+  }
+  return id;
 }
 
 function createInitialState() {
@@ -104,6 +128,7 @@ function createInitialState() {
     pieces,
     phase: "setup",
     boardMoveCount: 0,
+    moveNumber: 0,
     log: ["Partida creada."],
   };
 }
@@ -124,9 +149,141 @@ function loadState() {
   return null;
 }
 
+function normalizeState(nextState) {
+  nextState.phase = nextState.phase || (nextState.boardMoveCount ? "battle" : "setup");
+  nextState.boardMoveCount = nextState.boardMoveCount || 0;
+  nextState.moveNumber = nextState.moveNumber || 0;
+  nextState.roomId = roomId;
+  return nextState;
+}
+
 function saveState() {
   state.roomId = roomId;
   localStorage.setItem(storageKey(), JSON.stringify(state));
+}
+
+function gameStatus() {
+  if (state.winner) return "finished";
+  return isSetupPhase() ? "setup" : "battle";
+}
+
+async function initializeOnlineGame() {
+  if (!supabaseClient) return;
+
+  const { data, error } = await supabaseClient
+    .from("gungi_games")
+    .select("current_state, move_count")
+    .eq("id", roomId)
+    .maybeSingle();
+
+  if (error) {
+    syncReady = false;
+    state.log.unshift(`Supabase no sincronizo: ${error.message}`);
+    saveState();
+    render();
+    return;
+  }
+
+  if (data?.current_state) {
+    state = normalizeState(data.current_state);
+    selected = null;
+    legalTargets = [];
+    selectedCell = null;
+    saveState();
+    render();
+  } else {
+    const { error: insertError } = await supabaseClient.from("gungi_games").insert({
+      id: roomId,
+      status: gameStatus(),
+      current_state: state,
+      move_count: state.moveNumber || 0,
+    });
+    if (insertError && insertError.code !== "23505") {
+      state.log.unshift(`Supabase no creo la sala: ${insertError.message}`);
+      saveState();
+      render();
+      return;
+    }
+  }
+
+  syncReady = true;
+  subscribeToOnlineMoves();
+}
+
+function subscribeToOnlineMoves() {
+  if (!supabaseClient) return;
+  if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+
+  realtimeChannel = supabaseClient
+    .channel(`gungi-game-${roomId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "gungi_game_moves",
+        filter: `game_id=eq.${roomId}`,
+      },
+      ({ new: move }) => applyRemoteMove(move)
+    )
+    .subscribe();
+}
+
+function applyRemoteMove(move) {
+  if (!move || move.client_id === clientId() || move.id <= lastRemoteMoveId) return;
+  lastRemoteMoveId = move.id;
+  state = normalizeState(move.state_after);
+  selected = null;
+  legalTargets = [];
+  selectedCell = null;
+  saveState();
+  render();
+}
+
+async function recordOnlineAction(action) {
+  if (!supabaseClient || !syncReady || !action) return;
+
+  const snapshot = JSON.parse(JSON.stringify(state));
+  const move = {
+    game_id: roomId,
+    move_number: state.moveNumber,
+    client_id: clientId(),
+    player_color: action.playerColor,
+    phase: action.phase,
+    move_type: action.moveType,
+    piece_id: action.pieceId || null,
+    piece_type: action.pieceType || null,
+    from_row: action.from?.row ?? null,
+    from_col: action.from?.col ?? null,
+    to_row: action.to?.row ?? null,
+    to_col: action.to?.col ?? null,
+    captured_piece_id: action.capturedPieceId || null,
+    state_after: snapshot,
+  };
+
+  const { error: moveError } = await supabaseClient.from("gungi_game_moves").insert(move);
+  if (moveError && moveError.code !== "23505") {
+    state.log.unshift(`No se guardo la jugada online: ${moveError.message}`);
+    saveState();
+    render();
+    return;
+  }
+
+  const { error: gameError } = await supabaseClient
+    .from("gungi_games")
+    .update({
+      status: gameStatus(),
+      current_state: snapshot,
+      move_count: state.moveNumber,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", roomId);
+
+  if (gameError) {
+    state.log.unshift(`No se actualizo la sala online: ${gameError.message}`);
+    saveState();
+    render();
+  }
 }
 
 function pieceImage(piece) {
@@ -281,18 +438,24 @@ function canAct(color) {
   return !els.honorMode.checked || state.turn === color;
 }
 
-function completeAction() {
+function completeAction(action) {
   if (isSetupPhase()) {
     if (state.hands.blue.length === 0 && state.hands.red.length === 0) {
-      startBattle();
+      startBattle(action);
       return;
     }
     state.turn = state.turn === "blue" ? "red" : "blue";
-    saveState();
-    render();
+    finalizeAction(action);
     return;
   }
-  finishTurn();
+  finishTurn(action);
+}
+
+function finalizeAction(action) {
+  state.moveNumber = (state.moveNumber || 0) + 1;
+  saveState();
+  render();
+  recordOnlineAction(action);
 }
 
 function selectHandPiece(pieceId) {
@@ -338,11 +501,12 @@ function selectBoardPiece(pieceId) {
 
 function cellClick(row, col) {
   if (selected && selected.kind !== "inspect" && legalTargets.some((target) => sameTarget(target, { row, col }))) {
-    selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
+    const action =
+      selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
     selected = null;
     legalTargets = [];
     selectedCell = { row, col };
-    completeAction();
+    completeAction(action);
     return;
   }
   selectedCell = { row, col };
@@ -361,6 +525,14 @@ function dropPiece(pieceId, row, col) {
   state.hands[piece.color] = state.hands[piece.color].filter((id) => id !== pieceId);
   state.board[row][col].push(pieceId);
   state.log.unshift(`${PLAYERS[piece.color].label} coloca ${PIECES[piece.type].label}.`);
+  return {
+    moveType: "place",
+    phase: isSetupPhase() ? "setup" : "battle",
+    playerColor: piece.color,
+    pieceId,
+    pieceType: piece.type,
+    to: { row, col },
+  };
 }
 
 function movePiece(pieceId, from, row, col) {
@@ -368,18 +540,30 @@ function movePiece(pieceId, from, row, col) {
   const fromStack = state.board[from.row][from.col];
   fromStack.pop();
   const targetStack = state.board[row][col];
+  let capturedPieceId = null;
 
   if (targetStack.length && state.pieces[targetStack[targetStack.length - 1]].color !== piece.color) {
     const capturedId = targetStack.pop();
     const captured = state.pieces[capturedId];
     state.hands[piece.color].push(capturedId);
     captured.color = piece.color;
+    capturedPieceId = capturedId;
     if (captured.type === "Commander") state.winner = piece.color;
   }
 
   targetStack.push(pieceId);
   state.boardMoveCount = (state.boardMoveCount || 0) + 1;
   state.log.unshift(`${PLAYERS[piece.color].label} mueve ${PIECES[piece.type].label}.`);
+  return {
+    moveType: "move",
+    phase: isSetupPhase() ? "setup" : "battle",
+    playerColor: piece.color,
+    pieceId,
+    pieceType: piece.type,
+    from,
+    to: { row, col },
+    capturedPieceId,
+  };
 }
 
 function beginDrag(pieceId, source, event) {
@@ -411,11 +595,12 @@ function dropOnCell(row, col, event) {
   event.preventDefault();
   document.querySelectorAll(".cell.drag-over").forEach((cell) => cell.classList.remove("drag-over"));
   if (!selected || selected.kind === "inspect" || !legalTargets.some((target) => sameTarget(target, { row, col }))) return;
-  selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
+  const action =
+    selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
   selected = null;
   legalTargets = [];
   selectedCell = { row, col };
-  completeAction();
+  completeAction(action);
 }
 
 function updateTargetHighlights() {
@@ -431,28 +616,34 @@ function updateTargetHighlights() {
   renderPreview();
 }
 
-function startBattle() {
+function startBattle(action) {
   state.phase = "battle";
   state.turn = "blue";
   selected = null;
   legalTargets = [];
   selectedCell = null;
   state.log.unshift("Ambos jugadores colocaron todas sus piezas. La partida ha comenzado.");
-  saveState();
-  render();
+  finalizeAction(action || {
+    moveType: "start_battle",
+    phase: "setup",
+    playerColor: "blue",
+  });
 }
 
-function finishTurn() {
+function finishTurn(action) {
   if (!state.winner) state.turn = state.turn === "blue" ? "red" : "blue";
-  saveState();
-  render();
+  finalizeAction(action);
 }
 
 function pass(color) {
   if (isSetupPhase()) return;
   if (!canAct(color)) return;
   state.log.unshift(`${PLAYERS[color].label} pasa el turno.`);
-  finishTurn();
+  finishTurn({
+    moveType: "pass",
+    phase: "battle",
+    playerColor: color,
+  });
 }
 
 function renderBoard() {
@@ -522,11 +713,14 @@ function renderPieceButton(pieceId, source, stackSize = 0) {
       event.stopPropagation();
       const pos = piecePosition(pieceId);
       if (selected && selected.kind !== "inspect" && pos && selected.pieceId !== pieceId && legalTargets.some((target) => sameTarget(target, pos))) {
-        selected.kind === "hand" ? dropPiece(selected.pieceId, pos.row, pos.col) : movePiece(selected.pieceId, selected.from, pos.row, pos.col);
+        const action =
+          selected.kind === "hand"
+            ? dropPiece(selected.pieceId, pos.row, pos.col)
+            : movePiece(selected.pieceId, selected.from, pos.row, pos.col);
         selected = null;
         legalTargets = [];
         selectedCell = pos;
-        completeAction();
+        completeAction(action);
         return;
       }
       source === "hand" ? selectHandPiece(pieceId) : selectBoardPiece(pieceId);
@@ -728,7 +922,12 @@ function bindEvents() {
   els.honorMode.addEventListener("change", render);
 }
 
-setupPreviewSelect();
-bindEvents();
-saveState();
-render();
+async function boot() {
+  setupPreviewSelect();
+  bindEvents();
+  saveState();
+  render();
+  await initializeOnlineGame();
+}
+
+boot();

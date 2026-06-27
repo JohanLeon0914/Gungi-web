@@ -81,7 +81,7 @@
           <textarea id="stateBox" spellcheck="false" aria-label="Estado exportado"></textarea>
           <p>
             Este prototipo no usa servidor. Para jugar a distancia, compartan el link de sala y, cuando quieran sincronizar,
-            usen Exportar/Importar el estado de la partida.
+            si Supabase no esta configurado, usen Exportar/Importar el estado de la partida.
           </p>
         </article>
       </section>
@@ -94,6 +94,8 @@
       </button>
     </template>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
