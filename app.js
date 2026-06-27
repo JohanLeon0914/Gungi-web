@@ -72,6 +72,8 @@ const supabaseClient =
     : null;
 let realtimeChannel = null;
 let lastRemoteMoveId = 0;
+let syncPollTimer = null;
+let syncInFlight = false;
 let syncReady = false;
 
 const params = new URLSearchParams(location.search);
@@ -167,6 +169,12 @@ function gameStatus() {
   return isSetupPhase() ? "setup" : "battle";
 }
 
+function resetSelection() {
+  selected = null;
+  legalTargets = [];
+  selectedCell = null;
+}
+
 async function initializeOnlineGame() {
   if (!supabaseClient) return;
 
@@ -186,9 +194,7 @@ async function initializeOnlineGame() {
 
   if (data?.current_state) {
     state = normalizeState(data.current_state);
-    selected = null;
-    legalTargets = [];
-    selectedCell = null;
+    resetSelection();
     saveState();
     render();
   } else {
@@ -208,6 +214,8 @@ async function initializeOnlineGame() {
 
   syncReady = true;
   subscribeToOnlineMoves();
+  startMovePolling();
+  await fetchRemoteMoves();
 }
 
 function subscribeToOnlineMoves() {
@@ -226,18 +234,58 @@ function subscribeToOnlineMoves() {
       },
       ({ new: move }) => applyRemoteMove(move)
     )
-    .subscribe();
+    .subscribe((status, error) => {
+      if (status === "SUBSCRIBED") {
+        fetchRemoteMoves();
+        return;
+      }
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        console.warn("Supabase Realtime no esta activo:", status, error);
+      }
+    });
 }
 
 function applyRemoteMove(move) {
-  if (!move || move.client_id === clientId() || move.id <= lastRemoteMoveId) return;
-  lastRemoteMoveId = move.id;
+  if (!move || move.client_id === clientId()) return false;
+  if ((move.move_number || 0) <= (state.moveNumber || 0)) return false;
+  if (move.id && move.id <= lastRemoteMoveId) return false;
+  lastRemoteMoveId = Math.max(lastRemoteMoveId, move.id || 0);
   state = normalizeState(move.state_after);
-  selected = null;
-  legalTargets = [];
-  selectedCell = null;
+  resetSelection();
   saveState();
   render();
+  return true;
+}
+
+function startMovePolling() {
+  if (!supabaseClient || syncPollTimer) return;
+  syncPollTimer = window.setInterval(fetchRemoteMoves, 1500);
+  window.addEventListener("focus", fetchRemoteMoves);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) fetchRemoteMoves();
+  });
+}
+
+async function fetchRemoteMoves() {
+  if (!supabaseClient || !syncReady || syncInFlight) return;
+  syncInFlight = true;
+
+  const { data, error } = await supabaseClient
+    .from("gungi_game_moves")
+    .select("id, move_number, client_id, state_after")
+    .eq("game_id", roomId)
+    .gt("move_number", state.moveNumber || 0)
+    .order("move_number", { ascending: true })
+    .limit(20);
+
+  syncInFlight = false;
+
+  if (error) {
+    console.warn("No se pudieron leer movimientos remotos:", error.message);
+    return;
+  }
+
+  (data || []).forEach((move) => applyRemoteMove(move));
 }
 
 async function recordOnlineAction(action) {
@@ -875,13 +923,8 @@ function importState() {
   try {
     const parsed = JSON.parse(decodeURIComponent(escape(atob(els.stateBox.value.trim()))));
     if (!parsed.board || !parsed.hands || !parsed.pieces) throw new Error("Estado invalido");
-    state = parsed;
-    state.phase = state.phase || (state.boardMoveCount ? "battle" : "setup");
-    state.boardMoveCount = state.boardMoveCount || 0;
-    state.roomId = roomId;
-    selected = null;
-    legalTargets = [];
-    selectedCell = null;
+    state = normalizeState(parsed);
+    resetSelection();
     saveState();
     render();
   } catch (error) {
@@ -894,11 +937,12 @@ function newGame() {
   const nextUrl = `${location.pathname}?id=${roomId}`;
   history.replaceState(null, "", nextUrl);
   state = createInitialState();
-  selected = null;
-  legalTargets = [];
-  selectedCell = null;
+  resetSelection();
+  syncReady = false;
+  lastRemoteMoveId = 0;
   saveState();
   render();
+  initializeOnlineGame();
 }
 
 async function copyLink() {
