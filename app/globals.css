@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: Arial, Helvetica, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: #080706;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  color: #f4eee3;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(176, 58, 46, 0.18), transparent 28rem),
+    radial-gradient(circle at 78% 2%, rgba(27, 148, 128, 0.12), transparent 24rem),
+    linear-gradient(135deg, #080706 0%, #13100d 48%, #070605 100%);
+}
+
+button,
+select,
+textarea,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.board-grid {
+  grid-template-columns: repeat(9, minmax(34px, 68px));
+  grid-template-rows: repeat(9, minmax(34px, 68px));
+}
+
+@media (max-width: 760px) {
+  .board-grid {
+    grid-template-columns: repeat(9, minmax(30px, 1fr));
+    grid-template-rows: repeat(9, minmax(30px, 1fr));
+  }
+}
+
+.piece-img {
+  image-rendering: auto;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.38));
+}
+
+.hand-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(245, 158, 11, 0.45) rgba(255, 255, 255, 0.06);
+}
+
+.hand-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.hand-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+}
+
+.hand-scroll::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.45);
+  border-radius: 999px;
+}
