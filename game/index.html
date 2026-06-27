@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="../">
+    <title>Gungi Web</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="Controles de partida">
+        <div>
+          <h1>Gungi</h1>
+          <p id="statusText">Preparando partida...</p>
+        </div>
+        <div class="room-controls">
+          <button id="newGameBtn" type="button">Nueva partida</button>
+          <button id="copyLinkBtn" type="button">Copiar link</button>
+          <button id="exportBtn" type="button">Exportar</button>
+          <button id="importBtn" type="button">Importar</button>
+        </div>
+      </section>
+
+      <section class="game-layout">
+        <aside class="side-panel red-panel" aria-label="Mano roja">
+          <div class="panel-head">
+            <h2>Rojo</h2>
+            <button id="redPassBtn" type="button">Pasar</button>
+          </div>
+          <div id="redHand" class="hand-grid"></div>
+        </aside>
+
+        <section class="board-zone" aria-label="Tablero de Gungi">
+          <div class="board-toolbar">
+            <div class="turn-pill" id="turnPill">Turno Azul</div>
+            <label class="toggle">
+              <input id="honorMode" type="checkbox" checked>
+              Respetar turnos
+            </label>
+          </div>
+          <div id="board" class="board"></div>
+          <div class="selection-card" id="selectionCard">
+            Selecciona una pieza de la mano o del tablero.
+          </div>
+          <div class="tower-card" id="towerCard" aria-live="polite"></div>
+        </section>
+
+        <aside class="side-panel blue-panel" aria-label="Mano azul">
+          <div class="panel-head">
+            <h2>Azul</h2>
+            <button id="bluePassBtn" type="button">Pasar</button>
+          </div>
+          <div id="blueHand" class="hand-grid"></div>
+        </aside>
+      </section>
+
+      <section class="reference-layout">
+        <article class="rules-panel">
+          <h2>Reglas rápidas</h2>
+          <ul>
+            <li>El tablero es de 9x9 y cada casilla puede formar una torre de hasta 3 piezas.</li>
+            <li>Solo se mueve la pieza superior de una torre. Las piezas inferiores quedan bloqueadas.</li>
+            <li>Al atacar una torre, reemplazas la pieza superior rival; las piezas inferiores permanecen.</li>
+            <li>Catapulta y Fortaleza son inmóviles y solo se colocan en nivel 1.</li>
+            <li>Peón y Espía tienen Recuperación Forzada: si no pueden moverse en el siguiente turno, deben volver a la mano antes del turno rival.</li>
+            <li>La condición de victoria práctica de esta web es capturar al Comandante rival.</li>
+          </ul>
+        </article>
+
+        <article class="preview-panel">
+          <div class="panel-head">
+            <h2>Previsualización</h2>
+            <select id="previewPiece" aria-label="Pieza para previsualizar"></select>
+          </div>
+          <div id="movementPreview" class="movement-preview"></div>
+        </article>
+
+        <article class="state-panel">
+          <h2>Estado compartido</h2>
+          <textarea id="stateBox" spellcheck="false" aria-label="Estado exportado"></textarea>
+          <p>
+            Este prototipo no usa servidor. Para jugar a distancia, compartan el link de sala y, cuando quieran sincronizar,
+            usen Exportar/Importar el estado de la partida.
+          </p>
+        </article>
+      </section>
+    </main>
+
+    <template id="pieceTemplate">
+      <button class="piece" type="button">
+        <img alt="">
+        <span></span>
+      </button>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
