@@ -336,11 +336,12 @@ function GamePageInner() {
   };
 
   const handleCellClick = (row, col) => {
-    if (selected && selected.kind !== "inspect" && legalTargets.some((target) => sameTarget(target, { row, col }))) {
+    const chosenTarget = legalTargets.find((target) => sameTarget(target, { row, col }));
+    if (selected && selected.kind !== "inspect" && chosenTarget) {
       const result =
         selected.kind === "hand"
           ? applyPlacement(gameState, selected.pieceId, row, col)
-          : applyMove(gameState, selected.pieceId, selected.from, row, col);
+          : applyMove(gameState, selected.pieceId, selected.from, row, col, chosenTarget);
       commitAction(result.next, result.action, { row, col });
       return;
     }
@@ -363,12 +364,13 @@ function GamePageInner() {
     try {
       const dragged = JSON.parse(raw);
       const targets = dragged.kind === "hand" ? legalDropsFor(gameState, dragged.pieceId) : legalMovesFor(gameState, dragged.pieceId);
-      if (!targets.some((target) => sameTarget(target, { row, col }))) return;
+      const chosenTarget = targets.find((target) => sameTarget(target, { row, col }));
+      if (!chosenTarget) return;
 
       const result =
         dragged.kind === "hand"
           ? applyPlacement(gameState, dragged.pieceId, row, col)
-          : applyMove(gameState, dragged.pieceId, dragged.from, row, col);
+          : applyMove(gameState, dragged.pieceId, dragged.from, row, col, chosenTarget);
       commitAction(result.next, result.action, { row, col });
     } catch {
       return;
@@ -581,9 +583,16 @@ function GamePageInner() {
                   <div className="flex flex-wrap gap-2">
                     {currentTower.map((pieceId, index) => {
                       const piece = gameState.pieces[pieceId];
+                      const isRed = piece.color === "red";
                       return (
                         <div key={pieceId} className="flex w-[92px] flex-col items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-2 text-center">
-                          <div className="relative grid h-12 w-12 place-items-center rounded-md bg-stone-100/95">
+                          <div
+                            className={`relative grid h-12 w-12 place-items-center overflow-hidden rounded-md border-2 bg-stone-100/95 ${
+                              isRed
+                                ? "border-red-500 shadow-[inset_0_0_0_3px_rgba(220,38,38,0.32)]"
+                                : "border-sky-500 shadow-[inset_0_0_0_3px_rgba(14,165,233,0.32)]"
+                            }`}
+                          >
                             <img src={pieceImage(piece)} alt={PIECES[piece.type].label} className="h-full w-full object-contain" />
                             <span className="absolute bottom-0 right-0 rounded bg-black/75 px-1 text-[10px] font-bold text-white">{index + 1}</span>
                           </div>
@@ -747,6 +756,15 @@ function HandPanel({ color, state, selected, onSelect, onPass, canAct, onPreview
 }
 
 function PieceButton({ piece, state, source, selected, onPreviewHoldStart, onPreviewClear, compact = false, draggable = false, onDragStart }) {
+  const colorFrame =
+    piece.color === "red"
+      ? {
+          shell: "border-red-500 bg-red-50 shadow-[inset_0_0_0_3px_rgba(220,38,38,0.34),0_0_0_1px_rgba(127,29,29,0.7)]",
+        }
+      : {
+          shell: "border-sky-500 bg-sky-50 shadow-[inset_0_0_0_3px_rgba(14,165,233,0.34),0_0_0_1px_rgba(12,74,110,0.7)]",
+        };
+
   return (
     <div
       draggable={draggable}
@@ -755,7 +773,7 @@ function PieceButton({ piece, state, source, selected, onPreviewHoldStart, onPre
         onDragStart?.(event);
       }}
       onPointerDown={(event) => onPreviewHoldStart?.(piece, event, source)}
-      className={`relative grid aspect-square w-full place-items-center overflow-hidden rounded-lg border bg-stone-100/95 ${selected ? "ring-2 ring-amber-300" : ""} ${compact ? "min-h-[38px]" : ""} ${piece.color === "red" ? "border-red-700" : "border-sky-700"}`}
+      className={`relative grid aspect-square w-full place-items-center overflow-hidden rounded-lg border-2 ${colorFrame.shell} ${selected ? "ring-2 ring-amber-300" : ""} ${compact ? "min-h-[38px]" : ""}`}
     >
       <img src={pieceImage(piece)} alt={PIECES[piece.type].label} className="piece-img h-full w-full object-contain" />
       {source === "board" ? (

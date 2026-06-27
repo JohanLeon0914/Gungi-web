@@ -564,10 +564,11 @@ function canTarget(piece, row, col) {
   const stack = state.board[row][col];
   if (stack.length >= MAX_LEVEL) {
     const top = state.pieces[stack[stack.length - 1]];
-    return top.color !== piece.color;
+    return top.color !== piece.color && top.type !== "Fortress";
   }
   if (!stack.length) return true;
   const top = state.pieces[stack[stack.length - 1]];
+  if (top.type === "Fortress" && top.color !== piece.color) return false;
   return top.type !== "Commander" || top.color !== piece.color;
 }
 
@@ -591,8 +592,9 @@ function rayTargets(piece, row, col, directions) {
       }
       const top = state.pieces[stack[stack.length - 1]];
       if (
-        top.color !== piece.color ||
-        (stack.length < MAX_LEVEL && top.type !== "Commander")
+        top.type !== "Fortress" &&
+        (top.color !== piece.color ||
+          (stack.length < MAX_LEVEL && top.type !== "Commander"))
       ) {
         moves.push({ row: nr, col: nc });
       }
@@ -602,11 +604,11 @@ function rayTargets(piece, row, col, directions) {
   return moves;
 }
 
-function movementDeltas(piece, level) {
+function movementDeltasForLevel(piece, level) {
   const f = PLAYERS[piece.color].forward;
   switch (piece.type) {
     case "Commander":
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+      return [
         [-1, -1],
         [-1, 0],
         [-1, 1],
@@ -615,26 +617,26 @@ function movementDeltas(piece, level) {
         [1, -1],
         [1, 0],
         [1, 1],
-      ]);
+      ];
     case "Captain":
       if (level === 0)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [f, -1],
           [f, 0],
           [f, 1],
           [-f, -1],
           [-f, 1],
-        ]);
+        ];
       if (level === 1)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [-1, -1],
           [-1, 0],
           [-1, 1],
           [1, -1],
           [1, 0],
           [1, 1],
-        ]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        ];
+      return [
         [-1, -1],
         [-1, 1],
         [1, -1],
@@ -643,80 +645,130 @@ function movementDeltas(piece, level) {
         [0, 2],
         [2 * f, -2],
         [2 * f, 2],
-      ]);
+      ];
     case "Samurai":
       if (level === 0)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [f, -1],
           [f, 0],
           [f, 1],
           [0, -1],
           [0, 1],
-        ]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        ];
+      return [
         [2 * f, 0],
         [-2 * f, 0],
         [0, -1],
         [0, 1],
         [f, -1],
         [f, 1],
-      ]);
+      ];
     case "Spy":
       if (level === 0)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [2 * f, -1],
           [2 * f, 1],
-        ]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        ];
+      return [
         [2 * f, -1],
         [2 * f, 1],
         [f, -1],
         [f, 1],
-      ]);
+      ];
     case "Bow":
       if (level === 0)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [2 * f, 0],
           [0, -2],
           [0, 2],
-        ]);
+        ];
       if (level === 1)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [-1, 0],
           [1, 0],
           [2 * f, -2],
           [2 * f, 2],
-        ]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        ];
+      return [
         [-2 * f, 0],
         [2 * f, -2],
         [2 * f, 2],
         [0, -2],
         [0, 2],
-      ]);
+      ];
     case "Pawn":
       if (level === 0)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [[f, 0]]);
+        return [[f, 0]];
       if (level === 1)
-        return addDeltaTargets(piece, ...currentPos(piece.id), [
+        return [
           [f, 0],
           [0, -2],
           [0, 2],
-        ]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        ];
+      return [
         [f, -1],
         [f, 1],
         [0, -2],
         [0, 2],
-      ]);
+      ];
     default:
       return [];
   }
 }
 
+function movementDeltas(piece, level) {
+  const deltas = [];
+  for (let currentLevel = 0; currentLevel <= level; currentLevel += 1) {
+    deltas.push(...movementDeltasForLevel(piece, currentLevel));
+  }
+  return uniqueTargets(addDeltaTargets(piece, ...currentPos(piece.id), deltas));
+}
+
 function currentPos(pieceId) {
   const pos = piecePosition(pieceId);
   return [pos.row, pos.col];
+}
+
+function uniqueTargets(targets) {
+  const seen = new Set();
+  return targets.filter((target) => {
+    const key = `${target.row}:${target.col}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function canLaunchSegmentTo(piece, segmentSize, row, col) {
+  if (!inBounds(row, col)) return false;
+  const stack = state.board[row][col];
+  const top = stack.length ? state.pieces[stack[stack.length - 1]] : null;
+  if (top?.type === "Fortress" && top.color !== piece.color) return false;
+  if (top?.type === "Commander" && top.color === piece.color) return false;
+  const capturedCount = top && top.color !== piece.color ? 1 : 0;
+  return stack.length - capturedCount + segmentSize <= MAX_LEVEL;
+}
+
+function catapultLaunchTarget(pieceId) {
+  const piece = state.pieces[pieceId];
+  const pos = piecePosition(pieceId);
+  if (!piece || !pos) return null;
+  const stack = state.board[pos.row][pos.col];
+  const pieceIndex = stack.indexOf(pieceId);
+  const catapult = state.pieces[stack[0]];
+  if (
+    pieceIndex <= 0 ||
+    pieceIndex !== stack.length - 1 ||
+    catapult?.type !== "Catapult" ||
+    catapult.color !== piece.color
+  )
+    return null;
+
+  const row = pos.row + PLAYERS[piece.color].forward * 3;
+  const col = pos.col;
+  const segmentSize = stack.length - 1;
+  if (!canLaunchSegmentTo(piece, segmentSize, row, col)) return null;
+  return { row, col, catapultLaunch: true };
 }
 
 function legalMovesFor(pieceId) {
@@ -727,35 +779,50 @@ function legalMovesFor(pieceId) {
   if (stack[stack.length - 1] !== pieceId) return [];
   const level = stack.length - 1;
   if (PIECES[piece.type].immobile) return [];
-  if (piece.type === "HiddenDragon" && level === 0)
-    return rayTargets(piece, pos.row, pos.col, [
+  let moves;
+  if (piece.type === "HiddenDragon") {
+    moves = rayTargets(piece, pos.row, pos.col, [
       [-1, 0],
       [1, 0],
       [0, -1],
       [0, 1],
     ]);
-  if (piece.type === "HiddenDragon")
-    return addDeltaTargets(piece, pos.row, pos.col, [
+    if (level >= 1)
+      moves.push(
+        ...addDeltaTargets(piece, pos.row, pos.col, [
+          [-1, -1],
+          [-1, 1],
+          [1, -1],
+          [1, 1],
+        ]),
+      );
+  } else if (piece.type === "Prodigy") {
+    moves = rayTargets(piece, pos.row, pos.col, [
       [-1, -1],
       [-1, 1],
       [1, -1],
       [1, 1],
     ]);
-  if (piece.type === "Prodigy" && level === 0)
-    return rayTargets(piece, pos.row, pos.col, [
-      [-1, -1],
-      [-1, 1],
-      [1, -1],
-      [1, 1],
-    ]);
-  if (piece.type === "Prodigy")
-    return addDeltaTargets(piece, pos.row, pos.col, [
-      [-1, 0],
-      [1, 0],
-      [0, -1],
-      [0, 1],
-    ]);
-  return movementDeltas(piece, level);
+    if (level >= 1)
+      moves.push(
+        ...addDeltaTargets(piece, pos.row, pos.col, [
+          [-1, 0],
+          [1, 0],
+          [0, -1],
+          [0, 1],
+        ]),
+      );
+  } else {
+    moves = movementDeltas(piece, level);
+  }
+
+  const launchTarget = catapultLaunchTarget(pieceId);
+  if (launchTarget) {
+    const existing = moves.find((target) => sameTarget(target, launchTarget));
+    if (existing) existing.catapultLaunch = true;
+    else moves.push(launchTarget);
+  }
+  return uniqueTargets(moves);
 }
 
 function legalDropsFor(pieceId) {
@@ -856,15 +923,18 @@ function selectBoardPiece(pieceId) {
 }
 
 function cellClick(row, col) {
+  const chosenTarget = legalTargets.find((target) =>
+    sameTarget(target, { row, col }),
+  );
   if (
     selected &&
     selected.kind !== "inspect" &&
-    legalTargets.some((target) => sameTarget(target, { row, col }))
+    chosenTarget
   ) {
     const action =
       selected.kind === "hand"
         ? dropPiece(selected.pieceId, row, col)
-        : movePiece(selected.pieceId, selected.from, row, col);
+        : movePiece(selected.pieceId, selected.from, row, col, chosenTarget);
     selected = null;
     legalTargets = [];
     selectedCell = { row, col };
@@ -901,10 +971,16 @@ function dropPiece(pieceId, row, col) {
   };
 }
 
-function movePiece(pieceId, from, row, col) {
+function movePiece(pieceId, from, row, col, options = {}) {
   const piece = state.pieces[pieceId];
   const fromStack = state.board[from.row][from.col];
-  fromStack.pop();
+  const isCatapultLaunch =
+    options.catapultLaunch &&
+    fromStack.length > 1 &&
+    fromStack[fromStack.length - 1] === pieceId &&
+    state.pieces[fromStack[0]]?.type === "Catapult" &&
+    state.pieces[fromStack[0]]?.color === piece.color;
+  const movingPieceIds = isCatapultLaunch ? fromStack.splice(1) : [fromStack.pop()];
   const targetStack = state.board[row][col];
   let capturedPieceId = null;
 
@@ -920,10 +996,12 @@ function movePiece(pieceId, from, row, col) {
     if (captured.type === "Commander") state.winner = piece.color;
   }
 
-  targetStack.push(pieceId);
+  targetStack.push(...movingPieceIds);
   state.boardMoveCount = (state.boardMoveCount || 0) + 1;
   state.log.unshift(
-    `${PLAYERS[piece.color].label} mueve ${PIECES[piece.type].label}.`,
+    isCatapultLaunch
+      ? `${PLAYERS[piece.color].label} lanza una torre con Catapulta.`
+      : `${PLAYERS[piece.color].label} mueve ${PIECES[piece.type].label}.`,
   );
   return {
     moveType: "move",
@@ -934,6 +1012,8 @@ function movePiece(pieceId, from, row, col) {
     from,
     to: { row, col },
     capturedPieceId,
+    catapultLaunch: isCatapultLaunch,
+    movedPieceIds: movingPieceIds,
   };
 }
 
@@ -974,16 +1054,15 @@ function dropOnCell(row, col, event) {
   document
     .querySelectorAll(".cell.drag-over")
     .forEach((cell) => cell.classList.remove("drag-over"));
-  if (
-    !selected ||
-    selected.kind === "inspect" ||
-    !legalTargets.some((target) => sameTarget(target, { row, col }))
-  )
+  const chosenTarget = legalTargets.find((target) =>
+    sameTarget(target, { row, col }),
+  );
+  if (!selected || selected.kind === "inspect" || !chosenTarget)
     return;
   const action =
     selected.kind === "hand"
       ? dropPiece(selected.pieceId, row, col)
-      : movePiece(selected.pieceId, selected.from, row, col);
+      : movePiece(selected.pieceId, selected.from, row, col, chosenTarget);
   selected = null;
   legalTargets = [];
   selectedCell = { row, col };
@@ -1342,32 +1421,50 @@ function renderMiniBoard(type, level, compact = false, color = "blue") {
 }
 
 function previewMarks(type, level) {
-  const raw = PREVIEW_DELTAS[type][level];
-  if (raw[0] === "orthogonal")
-    return [
-      [0, 2],
-      [1, 2],
-      [2, 0],
-      [2, 1],
-      [2, 3],
-      [2, 4],
-      [3, 2],
-      [4, 2],
-    ];
-  if (raw[0] === "diagonal")
-    return [
-      [0, 0],
-      [1, 1],
-      [3, 3],
-      [4, 4],
-      [0, 4],
-      [1, 3],
-      [3, 1],
-      [4, 0],
-    ];
-  return raw
-    .map(([dr, dc]) => [2 + dr, 2 + dc])
-    .filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5);
+  const marks = [];
+  for (let currentLevel = 0; currentLevel <= level; currentLevel += 1) {
+    const raw = PREVIEW_DELTAS[type][currentLevel];
+    if (raw[0] === "orthogonal")
+      marks.push(
+        ...[
+          [0, 2],
+          [1, 2],
+          [2, 0],
+          [2, 1],
+          [2, 3],
+          [2, 4],
+          [3, 2],
+          [4, 2],
+        ],
+      );
+    else if (raw[0] === "diagonal")
+      marks.push(
+        ...[
+          [0, 0],
+          [1, 1],
+          [3, 3],
+          [4, 4],
+          [0, 4],
+          [1, 3],
+          [3, 1],
+          [4, 0],
+        ],
+      );
+    else
+      marks.push(
+        ...raw
+          .map(([dr, dc]) => [2 + dr, 2 + dc])
+          .filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5),
+      );
+  }
+
+  const seen = new Set();
+  return marks.filter(([row, col]) => {
+    const key = `${row}:${col}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function orientedPreviewMarks(type, level, color) {
