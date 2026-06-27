@@ -11,8 +11,18 @@ const PIECES = {
   Captain: { label: "Capitan", count: 2, immobile: false },
   Samurai: { label: "Samurai", count: 2, immobile: false },
   Spy: { label: "Espia", count: 3, immobile: false, forcedRecovery: true },
-  Catapult: { label: "Catapulta", count: 1, immobile: true, levelOneOnly: true },
-  Fortress: { label: "Fortaleza", count: 1, immobile: true, levelOneOnly: true },
+  Catapult: {
+    label: "Catapulta",
+    count: 1,
+    immobile: true,
+    levelOneOnly: true,
+  },
+  Fortress: {
+    label: "Fortaleza",
+    count: 1,
+    immobile: true,
+    levelOneOnly: true,
+  },
   HiddenDragon: { label: "Dragon Oculto", count: 1, immobile: false },
   Prodigy: { label: "Prodigio", count: 1, immobile: false },
   Bow: { label: "Arquero", count: 2, immobile: false },
@@ -33,16 +43,174 @@ const PIECE_ORDER = [
 ];
 
 const PREVIEW_DELTAS = {
-  Commander: [[[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]], [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]], [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]],
-  Captain: [[[1, -1], [1, 0], [1, 1], [-1, -1], [-1, 1]], [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]], [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, -2], [0, 2], [2, -2], [2, 2]]],
-  Samurai: [[[1, -1], [1, 0], [1, 1], [0, -1], [0, 1]], [[-2, 0], [2, 0], [0, -1], [0, 1], [1, -1], [1, 1]], [[-2, 0], [2, 0], [0, -1], [0, 1], [1, -1], [1, 1]]],
-  Spy: [[[2, -1], [2, 1]], [[2, -1], [2, 1], [1, -1], [1, 1]], [[2, -1], [2, 1], [1, -1], [1, 1]]],
+  Commander: [
+    [
+      [-1, -1],
+      [-1, 0],
+      [-1, 1],
+      [0, -1],
+      [0, 1],
+      [1, -1],
+      [1, 0],
+      [1, 1],
+    ],
+    [
+      [-1, -1],
+      [-1, 0],
+      [-1, 1],
+      [0, -1],
+      [0, 1],
+      [1, -1],
+      [1, 0],
+      [1, 1],
+    ],
+    [
+      [-1, -1],
+      [-1, 0],
+      [-1, 1],
+      [0, -1],
+      [0, 1],
+      [1, -1],
+      [1, 0],
+      [1, 1],
+    ],
+  ],
+  Captain: [
+    [
+      [1, -1],
+      [1, 0],
+      [1, 1],
+      [-1, -1],
+      [-1, 1],
+    ],
+    [
+      [-1, -1],
+      [-1, 0],
+      [-1, 1],
+      [1, -1],
+      [1, 0],
+      [1, 1],
+    ],
+    [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+      [0, -2],
+      [0, 2],
+      [2, -2],
+      [2, 2],
+    ],
+  ],
+  Samurai: [
+    [
+      [1, -1],
+      [1, 0],
+      [1, 1],
+      [0, -1],
+      [0, 1],
+    ],
+    [
+      [-2, 0],
+      [2, 0],
+      [0, -1],
+      [0, 1],
+      [1, -1],
+      [1, 1],
+    ],
+    [
+      [-2, 0],
+      [2, 0],
+      [0, -1],
+      [0, 1],
+      [1, -1],
+      [1, 1],
+    ],
+  ],
+  Spy: [
+    [
+      [2, -1],
+      [2, 1],
+    ],
+    [
+      [2, -1],
+      [2, 1],
+      [1, -1],
+      [1, 1],
+    ],
+    [
+      [2, -1],
+      [2, 1],
+      [1, -1],
+      [1, 1],
+    ],
+  ],
   Catapult: [[], [], []],
   Fortress: [[], [], []],
-  HiddenDragon: [["orthogonal"], [[-1, -1], [-1, 1], [1, -1], [1, 1]], [[-1, -1], [-1, 1], [1, -1], [1, 1]]],
-  Prodigy: [["diagonal"], [[-1, 0], [1, 0], [0, -1], [0, 1]], [[-1, 0], [1, 0], [0, -1], [0, 1]]],
-  Bow: [[[2, 0], [0, -2], [0, 2]], [[-1, 0], [1, 0], [2, -2], [2, 2]], [[-2, 0], [2, -2], [2, 2], [0, -2], [0, 2]]],
-  Pawn: [[[1, 0]], [[1, 0], [0, -2], [0, 2]], [[1, -1], [1, 1], [0, -2], [0, 2]]],
+  HiddenDragon: [
+    ["orthogonal"],
+    [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ],
+    [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ],
+  ],
+  Prodigy: [
+    ["diagonal"],
+    [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ],
+    [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ],
+  ],
+  Bow: [
+    [
+      [2, 0],
+      [0, -2],
+      [0, 2],
+    ],
+    [
+      [-1, 0],
+      [1, 0],
+      [2, -2],
+      [2, 2],
+    ],
+    [
+      [-2, 0],
+      [2, -2],
+      [2, 2],
+      [0, -2],
+      [0, 2],
+    ],
+  ],
+  Pawn: [
+    [[1, 0]],
+    [
+      [1, 0],
+      [0, -2],
+      [0, 2],
+    ],
+    [
+      [1, -1],
+      [1, 1],
+      [0, -2],
+      [0, 2],
+    ],
+  ],
 };
 
 const els = {
@@ -68,8 +236,16 @@ const els = {
 const supabaseSettings = window.GUNGI_SUPABASE || {};
 const supabaseClient =
   window.supabase && supabaseSettings.url && supabaseSettings.publishableKey
-    ? window.supabase.createClient(supabaseSettings.url, supabaseSettings.publishableKey)
+    ? window.supabase.createClient(
+        supabaseSettings.url,
+        supabaseSettings.publishableKey,
+      )
     : null;
+
+const BOARD_PREVIEW_HOLD_MS = 500;
+
+let heldPreviewEl = null;
+let heldPreviewTimer = null;
 let realtimeChannel = null;
 let lastRemoteMoveId = 0;
 let syncPollTimer = null;
@@ -83,7 +259,11 @@ let legalTargets = [];
 let selectedCell = null;
 let state = loadState() || createInitialState();
 state = normalizeState(state);
-if (state.phase !== "battle" && state.hands.blue.length === 0 && state.hands.red.length === 0) {
+if (
+  state.phase !== "battle" &&
+  state.hands.blue.length === 0 &&
+  state.hands.red.length === 0
+) {
   state.phase = "battle";
 }
 
@@ -91,7 +271,9 @@ function createRoomId() {
   const bytes = new Uint8Array(12);
   if (globalThis.crypto?.getRandomValues) {
     globalThis.crypto.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => byte.toString(36).padStart(2, "0")).join("").slice(0, 18);
+    return Array.from(bytes, (byte) => byte.toString(36).padStart(2, "0"))
+      .join("")
+      .slice(0, 18);
   }
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
 }
@@ -125,7 +307,9 @@ function createInitialState() {
     roomId,
     turn: "blue",
     winner: null,
-    board: Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => [])),
+    board: Array.from({ length: BOARD_SIZE }, () =>
+      Array.from({ length: BOARD_SIZE }, () => []),
+    ),
     hands,
     pieces,
     phase: "setup",
@@ -152,7 +336,8 @@ function loadState() {
 }
 
 function normalizeState(nextState) {
-  nextState.phase = nextState.phase || (nextState.boardMoveCount ? "battle" : "setup");
+  nextState.phase =
+    nextState.phase || (nextState.boardMoveCount ? "battle" : "setup");
   nextState.boardMoveCount = nextState.boardMoveCount || 0;
   nextState.moveNumber = nextState.moveNumber || 0;
   nextState.roomId = roomId;
@@ -198,12 +383,14 @@ async function initializeOnlineGame() {
     saveState();
     render();
   } else {
-    const { error: insertError } = await supabaseClient.from("gungi_games").insert({
-      id: roomId,
-      status: gameStatus(),
-      current_state: state,
-      move_count: state.moveNumber || 0,
-    });
+    const { error: insertError } = await supabaseClient
+      .from("gungi_games")
+      .insert({
+        id: roomId,
+        status: gameStatus(),
+        current_state: state,
+        move_count: state.moveNumber || 0,
+      });
     if (insertError && insertError.code !== "23505") {
       state.log.unshift(`Supabase no creo la sala: ${insertError.message}`);
       saveState();
@@ -232,14 +419,18 @@ function subscribeToOnlineMoves() {
         table: "gungi_game_moves",
         filter: `game_id=eq.${roomId}`,
       },
-      ({ new: move }) => applyRemoteMove(move)
+      ({ new: move }) => applyRemoteMove(move),
     )
     .subscribe((status, error) => {
       if (status === "SUBSCRIBED") {
         fetchRemoteMoves();
         return;
       }
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
         console.warn("Supabase Realtime no esta activo:", status, error);
       }
     });
@@ -309,7 +500,9 @@ async function recordOnlineAction(action) {
     state_after: snapshot,
   };
 
-  const { error: moveError } = await supabaseClient.from("gungi_game_moves").insert(move);
+  const { error: moveError } = await supabaseClient
+    .from("gungi_game_moves")
+    .insert(move);
   if (moveError && moveError.code !== "23505") {
     state.log.unshift(`No se guardo la jugada online: ${moveError.message}`);
     saveState();
@@ -397,7 +590,10 @@ function rayTargets(piece, row, col, directions) {
         continue;
       }
       const top = state.pieces[stack[stack.length - 1]];
-      if (top.color !== piece.color || (stack.length < MAX_LEVEL && top.type !== "Commander")) {
+      if (
+        top.color !== piece.color ||
+        (stack.length < MAX_LEVEL && top.type !== "Commander")
+      ) {
         moves.push({ row: nr, col: nc });
       }
       break;
@@ -410,25 +606,109 @@ function movementDeltas(piece, level) {
   const f = PLAYERS[piece.color].forward;
   switch (piece.type) {
     case "Commander":
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [-1, -1],
+        [-1, 0],
+        [-1, 1],
+        [0, -1],
+        [0, 1],
+        [1, -1],
+        [1, 0],
+        [1, 1],
+      ]);
     case "Captain":
-      if (level === 0) return addDeltaTargets(piece, ...currentPos(piece.id), [[f, -1], [f, 0], [f, 1], [-f, -1], [-f, 1]]);
-      if (level === 1) return addDeltaTargets(piece, ...currentPos(piece.id), [[-1, -1], [-1, 0], [-1, 1], [1, -1], [1, 0], [1, 1]]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, -2], [0, 2], [2 * f, -2], [2 * f, 2]]);
+      if (level === 0)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [f, -1],
+          [f, 0],
+          [f, 1],
+          [-f, -1],
+          [-f, 1],
+        ]);
+      if (level === 1)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [-1, -1],
+          [-1, 0],
+          [-1, 1],
+          [1, -1],
+          [1, 0],
+          [1, 1],
+        ]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [-1, -1],
+        [-1, 1],
+        [1, -1],
+        [1, 1],
+        [0, -2],
+        [0, 2],
+        [2 * f, -2],
+        [2 * f, 2],
+      ]);
     case "Samurai":
-      if (level === 0) return addDeltaTargets(piece, ...currentPos(piece.id), [[f, -1], [f, 0], [f, 1], [0, -1], [0, 1]]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[2 * f, 0], [-2 * f, 0], [0, -1], [0, 1], [f, -1], [f, 1]]);
+      if (level === 0)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [f, -1],
+          [f, 0],
+          [f, 1],
+          [0, -1],
+          [0, 1],
+        ]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [2 * f, 0],
+        [-2 * f, 0],
+        [0, -1],
+        [0, 1],
+        [f, -1],
+        [f, 1],
+      ]);
     case "Spy":
-      if (level === 0) return addDeltaTargets(piece, ...currentPos(piece.id), [[2 * f, -1], [2 * f, 1]]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[2 * f, -1], [2 * f, 1], [f, -1], [f, 1]]);
+      if (level === 0)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [2 * f, -1],
+          [2 * f, 1],
+        ]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [2 * f, -1],
+        [2 * f, 1],
+        [f, -1],
+        [f, 1],
+      ]);
     case "Bow":
-      if (level === 0) return addDeltaTargets(piece, ...currentPos(piece.id), [[2 * f, 0], [0, -2], [0, 2]]);
-      if (level === 1) return addDeltaTargets(piece, ...currentPos(piece.id), [[-1, 0], [1, 0], [2 * f, -2], [2 * f, 2]]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[-2 * f, 0], [2 * f, -2], [2 * f, 2], [0, -2], [0, 2]]);
+      if (level === 0)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [2 * f, 0],
+          [0, -2],
+          [0, 2],
+        ]);
+      if (level === 1)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [-1, 0],
+          [1, 0],
+          [2 * f, -2],
+          [2 * f, 2],
+        ]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [-2 * f, 0],
+        [2 * f, -2],
+        [2 * f, 2],
+        [0, -2],
+        [0, 2],
+      ]);
     case "Pawn":
-      if (level === 0) return addDeltaTargets(piece, ...currentPos(piece.id), [[f, 0]]);
-      if (level === 1) return addDeltaTargets(piece, ...currentPos(piece.id), [[f, 0], [0, -2], [0, 2]]);
-      return addDeltaTargets(piece, ...currentPos(piece.id), [[f, -1], [f, 1], [0, -2], [0, 2]]);
+      if (level === 0)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [[f, 0]]);
+      if (level === 1)
+        return addDeltaTargets(piece, ...currentPos(piece.id), [
+          [f, 0],
+          [0, -2],
+          [0, 2],
+        ]);
+      return addDeltaTargets(piece, ...currentPos(piece.id), [
+        [f, -1],
+        [f, 1],
+        [0, -2],
+        [0, 2],
+      ]);
     default:
       return [];
   }
@@ -447,10 +727,34 @@ function legalMovesFor(pieceId) {
   if (stack[stack.length - 1] !== pieceId) return [];
   const level = stack.length - 1;
   if (PIECES[piece.type].immobile) return [];
-  if (piece.type === "HiddenDragon" && level === 0) return rayTargets(piece, pos.row, pos.col, [[-1, 0], [1, 0], [0, -1], [0, 1]]);
-  if (piece.type === "HiddenDragon") return addDeltaTargets(piece, pos.row, pos.col, [[-1, -1], [-1, 1], [1, -1], [1, 1]]);
-  if (piece.type === "Prodigy" && level === 0) return rayTargets(piece, pos.row, pos.col, [[-1, -1], [-1, 1], [1, -1], [1, 1]]);
-  if (piece.type === "Prodigy") return addDeltaTargets(piece, pos.row, pos.col, [[-1, 0], [1, 0], [0, -1], [0, 1]]);
+  if (piece.type === "HiddenDragon" && level === 0)
+    return rayTargets(piece, pos.row, pos.col, [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ]);
+  if (piece.type === "HiddenDragon")
+    return addDeltaTargets(piece, pos.row, pos.col, [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ]);
+  if (piece.type === "Prodigy" && level === 0)
+    return rayTargets(piece, pos.row, pos.col, [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ]);
+  if (piece.type === "Prodigy")
+    return addDeltaTargets(piece, pos.row, pos.col, [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ]);
   return movementDeltas(piece, level);
 }
 
@@ -462,10 +766,14 @@ function legalDropsFor(pieceId) {
       const stack = state.board[row][col];
       const ownZone = piece.color === "blue" ? row >= 6 : row <= 2;
       if (!ownZone || stack.length >= MAX_LEVEL) continue;
-      if ((state.boardMoveCount || 0) === 0 && stack.length >= 2) continue;
       if (PIECES[piece.type].levelOneOnly && stack.length !== 0) continue;
       if (stack.some((id) => state.pieces[id].color !== piece.color)) continue;
-      if (stack.some((id) => id === pieceId || state.pieces[id].type === "Commander")) continue;
+      if (
+        stack.some(
+          (id) => id === pieceId || state.pieces[id].type === "Commander",
+        )
+      )
+        continue;
       targets.push({ row, col });
     }
   }
@@ -548,9 +856,15 @@ function selectBoardPiece(pieceId) {
 }
 
 function cellClick(row, col) {
-  if (selected && selected.kind !== "inspect" && legalTargets.some((target) => sameTarget(target, { row, col }))) {
+  if (
+    selected &&
+    selected.kind !== "inspect" &&
+    legalTargets.some((target) => sameTarget(target, { row, col }))
+  ) {
     const action =
-      selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
+      selected.kind === "hand"
+        ? dropPiece(selected.pieceId, row, col)
+        : movePiece(selected.pieceId, selected.from, row, col);
     selected = null;
     legalTargets = [];
     selectedCell = { row, col };
@@ -570,9 +884,13 @@ function cellClick(row, col) {
 
 function dropPiece(pieceId, row, col) {
   const piece = state.pieces[pieceId];
-  state.hands[piece.color] = state.hands[piece.color].filter((id) => id !== pieceId);
+  state.hands[piece.color] = state.hands[piece.color].filter(
+    (id) => id !== pieceId,
+  );
   state.board[row][col].push(pieceId);
-  state.log.unshift(`${PLAYERS[piece.color].label} coloca ${PIECES[piece.type].label}.`);
+  state.log.unshift(
+    `${PLAYERS[piece.color].label} coloca ${PIECES[piece.type].label}.`,
+  );
   return {
     moveType: "place",
     phase: isSetupPhase() ? "setup" : "battle",
@@ -590,7 +908,10 @@ function movePiece(pieceId, from, row, col) {
   const targetStack = state.board[row][col];
   let capturedPieceId = null;
 
-  if (targetStack.length && state.pieces[targetStack[targetStack.length - 1]].color !== piece.color) {
+  if (
+    targetStack.length &&
+    state.pieces[targetStack[targetStack.length - 1]].color !== piece.color
+  ) {
     const capturedId = targetStack.pop();
     const captured = state.pieces[capturedId];
     state.hands[piece.color].push(capturedId);
@@ -601,7 +922,9 @@ function movePiece(pieceId, from, row, col) {
 
   targetStack.push(pieceId);
   state.boardMoveCount = (state.boardMoveCount || 0) + 1;
-  state.log.unshift(`${PLAYERS[piece.color].label} mueve ${PIECES[piece.type].label}.`);
+  state.log.unshift(
+    `${PLAYERS[piece.color].label} mueve ${PIECES[piece.type].label}.`,
+  );
   return {
     moveType: "move",
     phase: isSetupPhase() ? "setup" : "battle",
@@ -625,26 +948,42 @@ function beginDrag(pieceId, source, event) {
     return;
   }
   const pos = piecePosition(pieceId);
-  selected = source === "hand" ? { kind: "hand", pieceId } : { kind: "board", pieceId, from: pos };
+  selected =
+    source === "hand"
+      ? { kind: "hand", pieceId }
+      : { kind: "board", pieceId, from: pos };
   selectedCell = pos;
-  legalTargets = source === "hand" ? legalDropsFor(pieceId) : legalMovesFor(pieceId);
+  legalTargets =
+    source === "hand" ? legalDropsFor(pieceId) : legalMovesFor(pieceId);
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", JSON.stringify(selected));
   event.currentTarget.classList.add("dragging");
+  clearHeldPreview();
   updateTargetHighlights();
 }
 
 function endDrag(event) {
   event.currentTarget.classList.remove("dragging");
-  document.querySelectorAll(".cell.drag-over").forEach((cell) => cell.classList.remove("drag-over"));
+  document
+    .querySelectorAll(".cell.drag-over")
+    .forEach((cell) => cell.classList.remove("drag-over"));
 }
 
 function dropOnCell(row, col, event) {
   event.preventDefault();
-  document.querySelectorAll(".cell.drag-over").forEach((cell) => cell.classList.remove("drag-over"));
-  if (!selected || selected.kind === "inspect" || !legalTargets.some((target) => sameTarget(target, { row, col }))) return;
+  document
+    .querySelectorAll(".cell.drag-over")
+    .forEach((cell) => cell.classList.remove("drag-over"));
+  if (
+    !selected ||
+    selected.kind === "inspect" ||
+    !legalTargets.some((target) => sameTarget(target, { row, col }))
+  )
+    return;
   const action =
-    selected.kind === "hand" ? dropPiece(selected.pieceId, row, col) : movePiece(selected.pieceId, selected.from, row, col);
+    selected.kind === "hand"
+      ? dropPiece(selected.pieceId, row, col)
+      : movePiece(selected.pieceId, selected.from, row, col);
   selected = null;
   legalTargets = [];
   selectedCell = { row, col };
@@ -655,10 +994,26 @@ function updateTargetHighlights() {
   document.querySelectorAll(".cell").forEach((cell) => {
     const row = Number(cell.dataset.row);
     const col = Number(cell.dataset.col);
-    const valid = legalTargets.some((target) => sameTarget(target, { row, col }));
+    const valid = legalTargets.some((target) =>
+      sameTarget(target, { row, col }),
+    );
     const top = topPiece(row, col);
-    cell.classList.toggle("preview", valid && !(top && selected && top.color !== state.pieces[selected.pieceId].color));
-    cell.classList.toggle("capture", valid && Boolean(top && selected && top.color !== state.pieces[selected.pieceId].color));
+    cell.classList.toggle(
+      "preview",
+      valid &&
+        !(
+          top &&
+          selected &&
+          top.color !== state.pieces[selected.pieceId].color
+        ),
+    );
+    cell.classList.toggle(
+      "capture",
+      valid &&
+        Boolean(
+          top && selected && top.color !== state.pieces[selected.pieceId].color,
+        ),
+    );
   });
   renderStatus();
   renderPreview();
@@ -670,12 +1025,16 @@ function startBattle(action) {
   selected = null;
   legalTargets = [];
   selectedCell = null;
-  state.log.unshift("Ambos jugadores colocaron todas sus piezas. La partida ha comenzado.");
-  finalizeAction(action || {
-    moveType: "start_battle",
-    phase: "setup",
-    playerColor: "blue",
-  });
+  state.log.unshift(
+    "Ambos jugadores colocaron todas sus piezas. La partida ha comenzado.",
+  );
+  finalizeAction(
+    action || {
+      moveType: "start_battle",
+      phase: "setup",
+      playerColor: "blue",
+    },
+  );
 }
 
 function finishTurn(action) {
@@ -707,10 +1066,15 @@ function renderBoard() {
       cell.setAttribute("aria-label", `Fila ${row + 1}, columna ${col + 1}`);
       if (row >= 6) cell.classList.add("setup-blue");
       if (row <= 2) cell.classList.add("setup-red");
-      if (selectedCell && selectedCell.row === row && selectedCell.col === col) cell.classList.add("selected");
+      if (selectedCell && selectedCell.row === row && selectedCell.col === col)
+        cell.classList.add("selected");
       if (legalTargets.some((target) => sameTarget(target, { row, col }))) {
         const top = topPiece(row, col);
-        cell.classList.add(top && top.color !== state.pieces[selected.pieceId].color ? "capture" : "preview");
+        cell.classList.add(
+          top && top.color !== state.pieces[selected.pieceId].color
+            ? "capture"
+            : "preview",
+        );
       }
       cell.addEventListener("click", () => cellClick(row, col));
       cell.addEventListener("keydown", (event) => {
@@ -720,12 +1084,17 @@ function renderBoard() {
         }
       });
       cell.addEventListener("dragover", (event) => {
-        if (selected && legalTargets.some((target) => sameTarget(target, { row, col }))) {
+        if (
+          selected &&
+          legalTargets.some((target) => sameTarget(target, { row, col }))
+        ) {
           event.preventDefault();
           cell.classList.add("drag-over");
         }
       });
-      cell.addEventListener("dragleave", () => cell.classList.remove("drag-over"));
+      cell.addEventListener("dragleave", () =>
+        cell.classList.remove("drag-over"),
+      );
       cell.addEventListener("drop", (event) => dropOnCell(row, col, event));
 
       const stackEl = document.createElement("div");
@@ -735,7 +1104,9 @@ function renderBoard() {
       if (visiblePieceId) {
         const slot = document.createElement("div");
         slot.className = "slot";
-        slot.appendChild(renderPieceButton(visiblePieceId, "board", stack.length));
+        slot.appendChild(
+          renderPieceButton(visiblePieceId, "board", stack.length),
+        );
         stackEl.appendChild(slot);
       }
       cell.appendChild(stackEl);
@@ -744,7 +1115,7 @@ function renderBoard() {
   }
 }
 
-function renderPieceButton(pieceId, source, stackSize = 0) {
+function renderPieceButton(pieceId, source) {
   const piece = state.pieces[pieceId];
   const button = document.createElement("button");
   button.type = "button";
@@ -753,14 +1124,24 @@ function renderPieceButton(pieceId, source, stackSize = 0) {
   button.draggable = !locked && !(isSetupPhase() && source !== "hand");
   if (selected?.pieceId === pieceId) button.classList.add("selected");
   const inactiveHand = source === "hand" && !canAct(piece.color);
-  const inactiveBoard = !isSetupPhase() && source !== "hand" && els.honorMode.checked && state.turn !== piece.color;
+  const inactiveBoard =
+    !isSetupPhase() &&
+    source !== "hand" &&
+    els.honorMode.checked &&
+    state.turn !== piece.color;
   if (locked || inactiveHand || inactiveBoard) button.classList.add("disabled");
   button.title = `${PIECES[piece.type].label} ${PLAYERS[piece.color].label}`;
   if (!locked) {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       const pos = piecePosition(pieceId);
-      if (selected && selected.kind !== "inspect" && pos && selected.pieceId !== pieceId && legalTargets.some((target) => sameTarget(target, pos))) {
+      if (
+        selected &&
+        selected.kind !== "inspect" &&
+        pos &&
+        selected.pieceId !== pieceId &&
+        legalTargets.some((target) => sameTarget(target, pos))
+      ) {
         const action =
           selected.kind === "hand"
             ? dropPiece(selected.pieceId, pos.row, pos.col)
@@ -773,8 +1154,14 @@ function renderPieceButton(pieceId, source, stackSize = 0) {
       }
       source === "hand" ? selectHandPiece(pieceId) : selectBoardPiece(pieceId);
     });
-    button.addEventListener("dragstart", (event) => beginDrag(pieceId, source, event));
+    button.addEventListener("dragstart", (event) => {
+      clearHeldPreview();
+      beginDrag(pieceId, source, event);
+    });
     button.addEventListener("dragend", endDrag);
+    button.addEventListener("pointerdown", (event) =>
+      showHeldPreview(piece, event, source),
+    );
   }
 
   const ribbon = document.createElement("i");
@@ -785,13 +1172,62 @@ function renderPieceButton(pieceId, source, stackSize = 0) {
   const level = document.createElement("span");
   level.textContent = source === "board" ? pieceLevel(pieceId) + 1 : "";
   button.append(ribbon, img, level);
-  if (stackSize > 1) {
-    const count = document.createElement("b");
-    count.className = "stack-count";
-    count.textContent = `x${stackSize}`;
-    button.appendChild(count);
-  }
   return button;
+}
+
+function renderMovementPopover(type, color) {
+  const popover = document.createElement("div");
+  popover.className = "movement-popover";
+  for (let level = 0; level < 3; level += 1) {
+    popover.appendChild(renderMiniBoard(type, level, true, color));
+  }
+  return popover;
+}
+
+function showHeldPreview(piece, event, source) {
+  if (!event.isPrimary) return;
+  clearHeldPreview();
+  const rect = event.currentTarget.getBoundingClientRect();
+  const margin = 8;
+  const gap = 8;
+  const width = Math.min(300, Math.max(0, window.innerWidth - margin * 2));
+  const estimatedHeight = Math.min(150, width / 3 + 42);
+  const minLeft = margin + width / 2;
+  const maxLeft = window.innerWidth - margin - width / 2;
+  const centeredLeft = rect.left + rect.width / 2;
+  const left = Math.min(Math.max(centeredLeft, minLeft), maxLeft);
+  const hasRoomAbove = rect.top - estimatedHeight - gap >= margin;
+  const top = hasRoomAbove
+    ? rect.top - estimatedHeight - gap
+    : Math.min(
+        Math.max(rect.bottom + gap, margin),
+        window.innerHeight - estimatedHeight - margin,
+      );
+
+  const showPreview = () => {
+    heldPreviewTimer = null;
+    heldPreviewEl = renderMovementPopover(piece.type, piece.color);
+    heldPreviewEl.style.left = `${left}px`;
+    heldPreviewEl.style.top = `${top}px`;
+    heldPreviewEl.style.width = `${width}px`;
+    document.body.appendChild(heldPreviewEl);
+  };
+
+  if (source === "board") {
+    heldPreviewTimer = window.setTimeout(showPreview, BOARD_PREVIEW_HOLD_MS);
+    return;
+  }
+
+  showPreview();
+}
+
+function clearHeldPreview() {
+  if (heldPreviewTimer) {
+    window.clearTimeout(heldPreviewTimer);
+    heldPreviewTimer = null;
+  }
+  heldPreviewEl?.remove();
+  heldPreviewEl = null;
 }
 
 function renderHands() {
@@ -799,14 +1235,24 @@ function renderHands() {
   els.redHand.innerHTML = "";
   for (const color of ["red", "blue"]) {
     const container = color === "blue" ? els.blueHand : els.redHand;
-    const sorted = [...state.hands[color]].sort((a, b) => PIECE_ORDER.indexOf(state.pieces[a].type) - PIECE_ORDER.indexOf(state.pieces[b].type));
-    sorted.forEach((pieceId) => container.appendChild(renderPieceButton(pieceId, "hand")));
+    const sorted = [...state.hands[color]].sort(
+      (a, b) =>
+        PIECE_ORDER.indexOf(state.pieces[a].type) -
+        PIECE_ORDER.indexOf(state.pieces[b].type),
+    );
+    sorted.forEach((pieceId) =>
+      container.appendChild(renderPieceButton(pieceId, "hand")),
+    );
   }
 }
 
 function renderStatus() {
   const turnLabel = PLAYERS[state.turn].label;
-  els.turnPill.textContent = state.winner ? `Gana ${PLAYERS[state.winner].label}` : isSetupPhase() ? `Arreglo inicial: ${turnLabel}` : `Turno ${turnLabel}`;
+  els.turnPill.textContent = state.winner
+    ? `Gana ${PLAYERS[state.winner].label}`
+    : isSetupPhase()
+      ? `Arreglo inicial: ${turnLabel}`
+      : `Turno ${turnLabel}`;
   els.turnPill.classList.toggle("red", state.turn === "red");
   els.bluePassBtn.hidden = isSetupPhase();
   els.redPassBtn.hidden = isSetupPhase();
@@ -840,7 +1286,12 @@ function renderTowerCard() {
   list.className = "tower-list";
   stack.forEach((pieceId, index) => {
     const item = document.createElement("div");
-    item.appendChild(renderPieceButton(pieceId, index === stack.length - 1 ? "tower" : "towerLocked"));
+    item.appendChild(
+      renderPieceButton(
+        pieceId,
+        index === stack.length - 1 ? "tower" : "towerLocked",
+      ),
+    );
     const label = document.createElement("p");
     const piece = state.pieces[pieceId];
     label.textContent = `Nivel ${index + 1}: ${PIECES[piece.type].label}`;
@@ -854,40 +1305,75 @@ function renderPreview() {
   els.movementPreview.innerHTML = "";
   const type = els.previewPiece.value || "Commander";
   for (let level = 0; level < 3; level += 1) {
-    const wrap = document.createElement("div");
-    wrap.className = "mini-board-wrap";
-    const title = document.createElement("div");
-    title.className = "mini-title";
-    title.textContent = `Nivel ${level + 1}`;
-    const board = document.createElement("div");
-    board.className = "mini-board";
-    const marks = previewMarks(type, level);
-    for (let r = 0; r < 5; r += 1) {
-      for (let c = 0; c < 5; c += 1) {
-        const cell = document.createElement("div");
-        cell.className = "mini-cell";
-        if (r === 2 && c === 2) {
-          cell.classList.add("origin");
-          const img = document.createElement("img");
-          img.src = `${ASSET}B${type}.png`;
-          img.alt = PIECES[type].label;
-          cell.appendChild(img);
-        } else if (marks.some((mark) => mark[0] === r && mark[1] === c)) {
-          cell.classList.add("move");
-        }
-        board.appendChild(cell);
-      }
-    }
-    wrap.append(title, board);
-    els.movementPreview.appendChild(wrap);
+    els.movementPreview.appendChild(renderMiniBoard(type, level));
   }
+}
+
+function renderMiniBoard(type, level, compact = false, color = "blue") {
+  const wrap = document.createElement("div");
+  wrap.className = compact ? "mini-board-wrap compact" : "mini-board-wrap";
+  const title = document.createElement("div");
+  title.className = "mini-title";
+  title.textContent = `Nivel ${level + 1}`;
+  const board = document.createElement("div");
+  board.className = "mini-board";
+  const marks = compact
+    ? orientedPreviewMarks(type, level, color)
+    : previewMarks(type, level);
+  const prefix = compact ? PLAYERS[color].prefix : "B";
+  for (let r = 0; r < 5; r += 1) {
+    for (let c = 0; c < 5; c += 1) {
+      const cell = document.createElement("div");
+      cell.className = "mini-cell";
+      if (r === 2 && c === 2) {
+        cell.classList.add("origin");
+        const img = document.createElement("img");
+        img.src = `${ASSET}${prefix}${type}.png`;
+        img.alt = PIECES[type].label;
+        cell.appendChild(img);
+      } else if (marks.some((mark) => mark[0] === r && mark[1] === c)) {
+        cell.classList.add("move");
+      }
+      board.appendChild(cell);
+    }
+  }
+  wrap.append(title, board);
+  return wrap;
 }
 
 function previewMarks(type, level) {
   const raw = PREVIEW_DELTAS[type][level];
-  if (raw[0] === "orthogonal") return [[0, 2], [1, 2], [2, 0], [2, 1], [2, 3], [2, 4], [3, 2], [4, 2]];
-  if (raw[0] === "diagonal") return [[0, 0], [1, 1], [3, 3], [4, 4], [0, 4], [1, 3], [3, 1], [4, 0]];
-  return raw.map(([dr, dc]) => [2 + dr, 2 + dc]).filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5);
+  if (raw[0] === "orthogonal")
+    return [
+      [0, 2],
+      [1, 2],
+      [2, 0],
+      [2, 1],
+      [2, 3],
+      [2, 4],
+      [3, 2],
+      [4, 2],
+    ];
+  if (raw[0] === "diagonal")
+    return [
+      [0, 0],
+      [1, 1],
+      [3, 3],
+      [4, 4],
+      [0, 4],
+      [1, 3],
+      [3, 1],
+      [4, 0],
+    ];
+  return raw
+    .map(([dr, dc]) => [2 + dr, 2 + dc])
+    .filter(([r, c]) => r >= 0 && r < 5 && c >= 0 && c < 5);
+}
+
+function orientedPreviewMarks(type, level, color) {
+  const marks = previewMarks(type, level);
+  if (color !== "blue") return marks;
+  return marks.map(([r, c]) => [4 - r, c]);
 }
 
 function render() {
@@ -899,8 +1385,11 @@ function render() {
 }
 
 function roomUrl() {
-  if (location.protocol === "file:") return `${location.href.split("?")[0]}?id=${roomId}`;
-  const path = location.pathname.endsWith("/game") ? location.pathname : location.pathname;
+  if (location.protocol === "file:")
+    return `${location.href.split("?")[0]}?id=${roomId}`;
+  const path = location.pathname.endsWith("/game")
+    ? location.pathname
+    : location.pathname;
   return `${location.origin}${path}?id=${roomId}`;
 }
 
@@ -915,20 +1404,26 @@ function setupPreviewSelect() {
 }
 
 function exportState() {
-  els.stateBox.value = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  els.stateBox.value = btoa(
+    unescape(encodeURIComponent(JSON.stringify(state))),
+  );
   els.stateBox.select();
 }
 
 function importState() {
   try {
-    const parsed = JSON.parse(decodeURIComponent(escape(atob(els.stateBox.value.trim()))));
-    if (!parsed.board || !parsed.hands || !parsed.pieces) throw new Error("Estado invalido");
+    const parsed = JSON.parse(
+      decodeURIComponent(escape(atob(els.stateBox.value.trim()))),
+    );
+    if (!parsed.board || !parsed.hands || !parsed.pieces)
+      throw new Error("Estado invalido");
     state = normalizeState(parsed);
     resetSelection();
     saveState();
     render();
   } catch (error) {
-    els.stateBox.value = "No se pudo importar el estado. Revisa que el texto este completo.";
+    els.stateBox.value =
+      "No se pudo importar el estado. Revisa que el texto este completo.";
   }
 }
 
@@ -964,6 +1459,8 @@ function bindEvents() {
   els.bluePassBtn.addEventListener("click", () => pass("blue"));
   els.redPassBtn.addEventListener("click", () => pass("red"));
   els.honorMode.addEventListener("change", render);
+  window.addEventListener("pointerup", clearHeldPreview);
+  window.addEventListener("pointercancel", clearHeldPreview);
 }
 
 async function boot() {
