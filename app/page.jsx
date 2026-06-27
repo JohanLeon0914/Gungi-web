@@ -29,7 +29,7 @@ import {
 
 function GamePageInner() {
   const searchParams = useSearchParams();
-  const initialRoomId = searchParams.get("id") || createRoomId();
+  const initialRoomId = searchParams.get("id") || "loading";
   const [roomId, setRoomId] = useState(initialRoomId);
   const [gameState, setGameStateRaw] = useState(() => createInitialState(initialRoomId));
   const [selected, setSelected] = useState(null);
@@ -53,20 +53,26 @@ function GamePageInner() {
   }, []);
 
   useEffect(() => {
+    let activeRoomId = initialRoomId;
+    if (!searchParams.get("id")) {
+      activeRoomId = createRoomId();
+      roomRef.current = activeRoomId;
+      setRoomId(activeRoomId);
+      const fresh = createInitialState(activeRoomId);
+      setGameState(fresh);
+      window.history.replaceState(null, "", `/?id=${activeRoomId}`);
+    }
+
     clientIdRef.current = window.localStorage.getItem("gungi-web:client-id") || createRoomId();
     window.localStorage.setItem("gungi-web:client-id", clientIdRef.current);
 
-    if (!searchParams.get("id")) {
-      window.history.replaceState(null, "", `/?id=${initialRoomId}`);
-    }
-
-    const stored = window.localStorage.getItem(`gungi-web:${initialRoomId}`);
+    const stored = window.localStorage.getItem(`gungi-web:${activeRoomId}`);
     if (stored) {
       try {
-        const parsed = normalizeState(JSON.parse(stored), initialRoomId);
+        const parsed = normalizeState(JSON.parse(stored), activeRoomId);
         setGameState(parsed);
       } catch {
-        setGameState(createInitialState(initialRoomId));
+        setGameState(createInitialState(activeRoomId));
       }
     }
   }, [initialRoomId, searchParams, setGameState]);
@@ -165,7 +171,7 @@ function GamePageInner() {
   );
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || roomId === "loading") return;
     roomRef.current = roomId;
     let active = true;
 
