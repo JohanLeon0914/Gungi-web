@@ -16,6 +16,7 @@ import {
   clockView,
   completeAction,
   createInitialState,
+  createRandomSetupState,
   createRoomId,
   formatClockMs,
   isSetupPhase,
@@ -33,6 +34,69 @@ import {
 } from "@/lib/gungiRules";
 
 const BOARD_PREVIEW_HOLD_MS = 500;
+const MAX_HISTORY_SNAPSHOTS = 300;
+
+function historyStorageKey(roomId) {
+  return `gungi-web-history:${roomId}`;
+}
+
+function saveSnapshotToLocalHistory(snapshot) {
+  if (typeof window === "undefined" || !snapshot?.roomId) return [];
+  const key = historyStorageKey(snapshot.roomId);
+  let history = [];
+  try {
+    history = JSON.parse(window.localStorage.getItem(key) || "[]");
+  } catch {
+    history = [];
+  }
+
+  const normalizedSnapshot = structuredCloneSafe(snapshot);
+  const last = history[history.length - 1];
+  if (last?.moveNumber === normalizedSnapshot.moveNumber) {
+    history[history.length - 1] = normalizedSnapshot;
+  } else {
+    history.push(normalizedSnapshot);
+  }
+  if (history.length > MAX_HISTORY_SNAPSHOTS) {
+    history = history.slice(history.length - MAX_HISTORY_SNAPSHOTS);
+  }
+  window.localStorage.setItem(key, JSON.stringify(history));
+  return history;
+}
+
+function readLocalHistory(roomId) {
+  if (typeof window === "undefined" || !roomId) return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(historyStorageKey(roomId)) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function localGameSummaries() {
+  if (typeof window === "undefined") return [];
+  const summaries = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key?.startsWith("gungi-web:") || key === "gungi-web:client-id") continue;
+    try {
+      const state = JSON.parse(window.localStorage.getItem(key));
+      if (state?.roomId) {
+        summaries.push({
+          id: state.roomId,
+          status: state.winner ? "finished" : isSetupPhase(state) ? "setup" : "battle",
+          move_count: state.moveNumber || 0,
+          updated_at: null,
+          local: true,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return summaries.sort((a, b) => (b.move_count || 0) - (a.move_count || 0));
+}
 
 function GamePageInner() {
   const searchParams = useSearchParams();
@@ -48,17 +112,27 @@ function GamePageInner() {
   const [syncStatus, setSyncStatus] = useState(isSupabaseConfigured ? "Conectando" : "Sin Supabase");
   const [lastSavedAt, setLastSavedAt] = useState(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [reviewSnapshots, setReviewSnapshots] = useState([]);
+  const [reviewIndex, setReviewIndex] = useState(null);
+  const [savedGames, setSavedGames] = useState([]);
+  const [historyStatus, setHistoryStatus] = useState("");
+  const [dismissedWinnerMove, setDismissedWinnerMove] = useState(null);
   const stateRef = useRef(gameState);
   const roomRef = useRef(roomId);
   const clientIdRef = useRef("");
   const syncInFlightRef = useRef(false);
   const heldPreviewTimerRef = useRef(null);
+  const suppressHistoryUpdateRef = useRef(false);
 
   const setGameState = useCallback((next) => {
     stateRef.current = next;
     setGameStateRaw(next);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(`gungi-web:${next.roomId}`, JSON.stringify(next));
+      const history = saveSnapshotToLocalHistory(next);
+      if (!suppressHistoryUpdateRef.current) {
+        setReviewSnapshots(history.map((snapshot) => ({ moveNumber: snapshot.moveNumber || 0, state: snapshot })));
+      }
     }
   }, []);
 
@@ -85,6 +159,7 @@ function GamePageInner() {
         setGameState(createInitialState(activeRoomId));
       }
     }
+    setReviewIndex(null);
   }, [initialRoomId, searchParams, setGameState]);
 
   const resetSelection = useCallback(() => {
@@ -133,6 +208,76 @@ function GamePageInner() {
       applyRemoteState(data.current_state, "poll");
     }
   }, [applyRemoteState]);
+
+  const loadSavedGames = useCallback(async () => {
+    const local = localGameSummaries();
+    if (!supabase) {
+      setSavedGames(local);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("gungi_games")
+      .select("id, status, move_count, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      setHistoryStatus(`No se pudo cargar historial: ${error.message}`);
+      setSavedGames(local);
+      return;
+    }
+
+    const seen = new Set();
+    const merged = [...(data || []), ...local].filter((game) => {
+      if (!game?.id || seen.has(game.id)) return false;
+      seen.add(game.id);
+      return true;
+    });
+    setSavedGames(merged);
+  }, []);
+
+  const loadReviewSnapshots = useCallback(async (targetRoomId = roomRef.current) => {
+    setHistoryStatus("Cargando jugadas");
+    let snapshots = [];
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("gungi_game_moves")
+        .select("move_number, state_after")
+        .eq("game_id", targetRoomId)
+        .order("move_number", { ascending: true });
+
+      if (error) {
+        setHistoryStatus(`Historial online no disponible: ${error.message}`);
+      } else {
+        snapshots = [
+          { moveNumber: 0, state: createInitialState(targetRoomId) },
+          ...(data || []).map((move) => ({
+            moveNumber: move.move_number || move.state_after?.moveNumber || 0,
+            state: normalizeState(move.state_after, targetRoomId),
+          })),
+        ];
+      }
+    }
+
+    if (!snapshots.length) {
+      const local = readLocalHistory(targetRoomId);
+      snapshots = local.map((snapshot) => ({
+        moveNumber: snapshot.moveNumber || 0,
+        state: normalizeState(snapshot, targetRoomId),
+      }));
+    }
+
+    if (!snapshots.length) {
+      snapshots = [{ moveNumber: 0, state: createInitialState(targetRoomId) }];
+    }
+
+    setReviewSnapshots(snapshots);
+    setReviewIndex(null);
+    setHistoryStatus(`${snapshots.length} posiciones disponibles`);
+    return snapshots;
+  }, []);
 
   const saveOnline = useCallback(
     async (nextState, action) => {
@@ -250,6 +395,12 @@ function GamePageInner() {
   }, [applyRemoteState, fetchSnapshot, resetSelection, roomId, saveOnline, setGameState]);
 
   useEffect(() => {
+    if (roomId === "loading") return;
+    loadSavedGames();
+    loadReviewSnapshots(roomId);
+  }, [loadReviewSnapshots, loadSavedGames, roomId]);
+
+  useEffect(() => {
     const tick = window.setInterval(() => setNowMs(Date.now()), 500);
     return () => window.clearInterval(tick);
   }, []);
@@ -283,6 +434,12 @@ function GamePageInner() {
     saveOnline(expired, null);
   }, [gameState, nowMs, resetSelection, saveOnline, setGameState]);
 
+  useEffect(() => {
+    if (!gameState.winner) {
+      setDismissedWinnerMove(null);
+    }
+  }, [gameState.winner]);
+
   const roomUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     return `${window.location.origin}/?id=${roomId}`;
@@ -290,11 +447,12 @@ function GamePageInner() {
 
   const canAct = useCallback(
     (color) => {
+      if (reviewIndex !== null) return false;
       if (gameState.winner) return false;
       if (isSetupPhase(gameState)) return gameState.turn === color;
       return !honorMode || gameState.turn === color;
     },
-    [gameState, honorMode],
+    [gameState, honorMode, reviewIndex],
   );
 
   const commitAction = useCallback(
@@ -309,6 +467,11 @@ function GamePageInner() {
   );
 
   const selectHandPiece = (pieceId) => {
+    if (reviewIndex !== null) return;
+    if (selected?.kind === "hand" && selected.pieceId === pieceId) {
+      resetSelection();
+      return;
+    }
     const piece = gameState.pieces[pieceId];
     if (!canAct(piece.color)) return;
     setSelected({ kind: "hand", pieceId });
@@ -318,6 +481,11 @@ function GamePageInner() {
   };
 
   const selectBoardPiece = (pieceId) => {
+    if (reviewIndex !== null) return;
+    if (selected?.pieceId === pieceId) {
+      resetSelection();
+      return;
+    }
     const piece = gameState.pieces[pieceId];
     const pos = piecePosition(gameState, pieceId);
     if (!pos) return;
@@ -336,6 +504,10 @@ function GamePageInner() {
   };
 
   const handleCellClick = (row, col) => {
+    if (reviewIndex !== null) {
+      setSelectedCell({ row, col });
+      return;
+    }
     const chosenTarget = legalTargets.find((target) => sameTarget(target, { row, col }));
     if (selected && selected.kind !== "inspect" && chosenTarget) {
       const result =
@@ -358,6 +530,7 @@ function GamePageInner() {
 
   const handleDropOnCell = (row, col, event) => {
     event.preventDefault();
+    if (reviewIndex !== null) return;
     const raw = event.dataTransfer.getData("application/json");
     if (!raw) return;
 
@@ -378,6 +551,7 @@ function GamePageInner() {
   };
 
   const handlePass = (color) => {
+    if (reviewIndex !== null) return;
     if (isSetupPhase(gameState) || !canAct(color)) return;
     const { next, action } = applyPass(gameState, color);
     setGameState(next);
@@ -386,10 +560,19 @@ function GamePageInner() {
   };
 
   const handleTimeControlChange = (event) => {
+    if (reviewIndex !== null) return;
     const next = setTimeControl(gameState, event.target.value);
     setGameState(next);
     resetSelection();
     saveOnline(next, null);
+  };
+
+  const handleRandomSetup = () => {
+    if (reviewIndex !== null || !isSetupPhase(gameState)) return;
+    const { next, action } = createRandomSetupState(gameState);
+    setGameState(next);
+    resetSelection();
+    saveOnline(next, action);
   };
 
   const showHeldPreview = (piece, event, source) => {
@@ -431,7 +614,44 @@ function GamePageInner() {
     setRoomId(nextRoomId);
     setGameState(next);
     resetSelection();
+    setReviewIndex(null);
     window.history.replaceState(null, "", `/?id=${nextRoomId}`);
+  };
+
+  const enterGameReview = async (targetRoomId) => {
+    if (!targetRoomId) return;
+    roomRef.current = targetRoomId;
+    setRoomId(targetRoomId);
+    window.history.replaceState(null, "", `/?id=${targetRoomId}`);
+    const snapshots = await loadReviewSnapshots(targetRoomId);
+    const latest = snapshots[snapshots.length - 1]?.state;
+    if (latest) {
+      suppressHistoryUpdateRef.current = true;
+      setGameState(latest);
+      suppressHistoryUpdateRef.current = false;
+    }
+    setReviewIndex(0);
+    resetSelection();
+  };
+
+  const stepReview = (direction) => {
+    if (!reviewSnapshots.length) return;
+    const currentIndex = reviewIndex ?? reviewSnapshots.length - 1;
+    const nextIndex = Math.min(Math.max(currentIndex + direction, 0), reviewSnapshots.length - 1);
+    setReviewIndex(nextIndex === reviewSnapshots.length - 1 ? null : nextIndex);
+    resetSelection();
+  };
+
+  const jumpReview = (index) => {
+    if (!reviewSnapshots.length) return;
+    const nextIndex = Math.min(Math.max(index, 0), reviewSnapshots.length - 1);
+    setReviewIndex(nextIndex === reviewSnapshots.length - 1 ? null : nextIndex);
+    resetSelection();
+  };
+
+  const returnToLive = () => {
+    setReviewIndex(null);
+    resetSelection();
   };
 
   const copyLink = async () => {
@@ -443,11 +663,15 @@ function GamePageInner() {
     }
   };
 
-  const turnLabel = PLAYERS[gameState.turn].label;
-  const selectedPiece = selected?.pieceId ? gameState.pieces[selected.pieceId] : null;
-  const currentTower = selectedCell ? gameState.board[selectedCell.row][selectedCell.col] : [];
-  const clocks = clockView(gameState, nowMs);
+  const visibleState = reviewIndex === null ? gameState : reviewSnapshots[reviewIndex]?.state || gameState;
+  const turnLabel = PLAYERS[visibleState.turn].label;
+  const visibleMoveIndex = reviewIndex ?? Math.max(0, reviewSnapshots.length - 1);
+  const isReviewing = reviewIndex !== null;
+  const selectedPiece = selected?.pieceId ? visibleState.pieces[selected.pieceId] : null;
+  const currentTower = selectedCell ? visibleState.board[selectedCell.row][selectedCell.col] : [];
+  const clocks = clockView(visibleState, isReviewing ? Date.parse(visibleState.clock?.activeSince || "") || nowMs : nowMs);
   const timeControlLocked = !isSetupPhase(gameState);
+  const showWinnerModal = Boolean(gameState.winner && !isReviewing && dismissedWinnerMove !== gameState.moveNumber);
 
   return (
     <main className="min-h-screen px-4 py-5 text-stone-100 sm:px-6 lg:px-8">
@@ -486,14 +710,78 @@ function GamePageInner() {
               </select>
             </label>
             <ActionButton onClick={createNewGame}>Nueva partida</ActionButton>
+            <ActionButton onClick={handleRandomSetup} disabled={isReviewing || !isSetupPhase(gameState)}>
+              Posicion aleatoria
+            </ActionButton>
+            <ActionButton onClick={loadSavedGames}>Actualizar historial</ActionButton>
+            <ActionLink href="/rules">Reglas</ActionLink>
             <ActionButton onClick={copyLink}>Copiar link</ActionButton>
           </div>
         </header>
 
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+          <InfoPanel title="Revision de jugadas">
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionButton onClick={() => stepReview(-1)} disabled={visibleMoveIndex <= 0}>
+                <span aria-hidden="true" className="text-xl leading-none">‹</span>
+                <span className="sr-only">Anterior</span>
+              </ActionButton>
+              <ActionButton onClick={() => stepReview(1)} disabled={!reviewSnapshots.length || visibleMoveIndex >= reviewSnapshots.length - 1}>
+                <span aria-hidden="true" className="text-xl leading-none">›</span>
+                <span className="sr-only">Siguiente</span>
+              </ActionButton>
+              <ActionButton onClick={returnToLive} disabled={!isReviewing}>
+                Volver al vivo
+              </ActionButton>
+              <span className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-stone-300">
+                {reviewSnapshots.length ? `${visibleMoveIndex + 1}/${reviewSnapshots.length}` : "Sin historial"}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(0, reviewSnapshots.length - 1)}
+              value={visibleMoveIndex}
+              onChange={(event) => jumpReview(Number(event.target.value))}
+              disabled={!reviewSnapshots.length}
+              className="mt-3 w-full accent-amber-300"
+              aria-label="Posicion en el historial de jugadas"
+            />
+            <p className="mt-2 text-xs text-stone-500">
+              {isReviewing ? "Estas viendo una posicion anterior solo en este navegador." : historyStatus || "Vista actual en vivo."}
+            </p>
+          </InfoPanel>
+
+          <InfoPanel title="Historial de partidas">
+            <div className="hand-scroll max-h-40 space-y-2 overflow-y-auto pr-1">
+              {savedGames.length ? (
+                savedGames.map((game) => (
+                  <button
+                    key={game.id}
+                    type="button"
+                    onClick={() => enterGameReview(game.id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left text-sm text-stone-200 transition hover:border-amber-300/50 hover:bg-amber-300/10"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">Sala {game.id}</span>
+                      <span className="text-xs text-stone-500">
+                        {game.local ? "local" : game.status} - {game.move_count || 0} jugadas
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs text-amber-200">Revisar</span>
+                  </button>
+                ))
+              ) : (
+                <p>No hay partidas guardadas en este navegador.</p>
+              )}
+            </div>
+          </InfoPanel>
+        </section>
+
         <section className="grid items-start gap-5 xl:grid-cols-[220px_minmax(520px,1fr)_220px]">
           <HandPanel
             color="red"
-            state={gameState}
+            state={visibleState}
             selected={selected}
             onSelect={selectHandPiece}
             onPass={() => handlePass("red")}
@@ -504,9 +792,14 @@ function GamePageInner() {
 
           <section className="rounded-2xl border border-white/10 bg-[#11100e]/90 p-3 shadow-glow sm:p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className={`rounded-full px-4 py-2 text-sm font-bold text-white ${gameState.turn === "red" ? "bg-red-700" : "bg-sky-700"}`}>
-                {gameState.winner ? `Gana ${PLAYERS[gameState.winner].label}` : isSetupPhase(gameState) ? `Posicionamiento: ${turnLabel}` : `Turno ${turnLabel}`}
+              <div className={`rounded-full px-4 py-2 text-sm font-bold text-white ${visibleState.turn === "red" ? "bg-red-700" : "bg-sky-700"}`}>
+                {visibleState.winner ? `Gana ${PLAYERS[visibleState.winner].label}` : isSetupPhase(visibleState) ? `Posicionamiento: ${turnLabel}` : `Turno ${turnLabel}`}
               </div>
+              {isReviewing ? (
+                <div className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-sm font-semibold text-amber-100">
+                  Revisando jugada {visibleState.moveNumber || 0}
+                </div>
+              ) : null}
               {clocks.controlId !== "none" ? (
                 <div className="flex items-center gap-2">
                   <ClockBadge color="red" clocks={clocks} />
@@ -520,10 +813,10 @@ function GamePageInner() {
             </div>
 
             <div className="mx-auto grid aspect-square w-full max-w-[680px] board-grid overflow-visible rounded-xl border-[10px] border-[#211b14] bg-[#2a2118] shadow-2xl">
-              {gameState.board.map((rowCells, row) =>
+              {visibleState.board.map((rowCells, row) =>
                 rowCells.map((stack, col) => {
-                  const top = stack.length ? gameState.pieces[stack[stack.length - 1]] : null;
-                  const valid = legalTargets.some((target) => sameTarget(target, { row, col }));
+                  const top = stack.length ? visibleState.pieces[stack[stack.length - 1]] : null;
+                  const valid = !isReviewing && legalTargets.some((target) => sameTarget(target, { row, col }));
                   const isSelected = selectedCell?.row === row && selectedCell?.col === col;
                   const zone = row <= 2 ? "bg-red-950/35" : row >= 6 ? "bg-sky-950/35" : "bg-stone-900/80";
                   return (
@@ -539,13 +832,13 @@ function GamePageInner() {
                       {top ? (
                         <PieceButton
                           piece={top}
-                          state={gameState}
+                          state={visibleState}
                           source="board"
                           stackSize={stack.length}
                           selected={selected?.pieceId === top.id}
                           onPreviewHoldStart={showHeldPreview}
                           onPreviewClear={clearHeldPreview}
-                          draggable={!isSetupPhase(gameState) && canAct(top.color)}
+                          draggable={!isReviewing && !isSetupPhase(gameState) && canAct(top.color)}
                           onDragStart={(event) => {
                             if (isSetupPhase(gameState) || !canAct(top.color)) {
                               event.preventDefault();
@@ -575,14 +868,14 @@ function GamePageInner() {
                     {PIECES[selectedPiece.type].label} {PLAYERS[selectedPiece.color].label}
                   </p>
                 ) : (
-                  <p>{gameState.log[0] || "Selecciona una pieza."}</p>
+                  <p>{visibleState.log[0] || "Selecciona una pieza."}</p>
                 )}
               </InfoPanel>
               <InfoPanel title="Torre">
                 {currentTower?.length ? (
                   <div className="flex flex-wrap gap-2">
                     {currentTower.map((pieceId, index) => {
-                      const piece = gameState.pieces[pieceId];
+                      const piece = visibleState.pieces[pieceId];
                       const isRed = piece.color === "red";
                       return (
                         <div key={pieceId} className="flex w-[92px] flex-col items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-2 text-center">
@@ -610,7 +903,7 @@ function GamePageInner() {
 
           <HandPanel
             color="blue"
-            state={gameState}
+            state={visibleState}
             selected={selected}
             onSelect={selectHandPiece}
             onPass={() => handlePass("blue")}
@@ -642,7 +935,7 @@ function GamePageInner() {
 
           <InfoPanel title="Actividad">
             <div className="space-y-2 text-sm">
-              {gameState.log.slice(0, 6).map((line, index) => (
+              {visibleState.log.slice(0, 6).map((line, index) => (
                 <p key={`${line}-${index}`} className="rounded-lg bg-white/5 px-3 py-2 text-stone-300">
                   {line}
                 </p>
@@ -653,6 +946,7 @@ function GamePageInner() {
             </p>
           </InfoPanel>
         </section>
+
       </section>
       {heldPreview ? (
         <MovementPopover
@@ -663,19 +957,56 @@ function GamePageInner() {
           width={heldPreview.width}
         />
       ) : null}
+      {showWinnerModal ? (
+        <WinnerModal
+          winner={gameState.winner}
+          onClose={() => setDismissedWinnerMove(gameState.moveNumber)}
+          onNewGame={createNewGame}
+        />
+      ) : null}
     </main>
   );
 }
 
-function ActionButton({ children, onClick }) {
+function ActionButton({ children, onClick, disabled = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-100 transition hover:border-amber-300/50 hover:bg-amber-300/10"
+      disabled={disabled}
+      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-100 transition hover:border-amber-300/50 hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>
+  );
+}
+
+function ActionLink({ children, href }) {
+  return (
+    <a
+      href={href}
+      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-stone-100 transition hover:border-amber-300/50 hover:bg-amber-300/10"
+    >
+      {children}
+    </a>
+  );
+}
+
+function WinnerModal({ winner, onClose, onNewGame }) {
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="winner-title">
+      <div className="w-full max-w-sm rounded-2xl border border-amber-300/30 bg-stone-950 p-5 text-center shadow-2xl">
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-200">Partida terminada</p>
+        <h2 id="winner-title" className="font-display text-4xl font-bold text-stone-50">
+          Gana {PLAYERS[winner].label}
+        </h2>
+        <p className="mt-3 text-sm text-stone-400">El resultado ya quedo guardado en esta sala.</p>
+        <div className="mt-5 flex justify-center gap-2">
+          <ActionButton onClick={onClose}>Cerrar</ActionButton>
+          <ActionButton onClick={onNewGame}>Nueva partida</ActionButton>
+        </div>
+      </div>
+    </div>
   );
 }
 
